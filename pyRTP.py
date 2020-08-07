@@ -21,17 +21,21 @@ params = {}
 # sound cloud parameters
 #Base note. #C4 = 261, A4 = 440
 #https://pages.mtu.edu/~suits/notefreqs.html
-params['baseNote'] = 440 
-params['change_range'] = (0,.3) # amount of change per time step, in indices
+params['baseNote'] = 300 
+params['change_range'] = (.1,.2) # amount of change per time step, in freq indices
+params['num_tones'] = 10
 
 # timing parameters
-params['dur_tonestep'] = 0.1
+params['dur_tonestep'] = 0.15
 params['dur_orient'] = .5
 params['dur_fb'] = 2
 
-# button strings
-params['buttonStr_inc'] = 'rshift'
-params['buttonStr_dec'] = 'lshift'
+# button list
+# (return, up) are (right and left) for the button box
+params['buttonList_inc'] = ['rshift','return']
+params['buttonList_dec'] = ['lshift','up']
+params['buttonList_any'] = params['buttonList_inc'][:]
+params['buttonList_any'].extend(params['buttonList_dec'] )
 
 # options
 params['options_playOrientOnEachTrial'] = False
@@ -264,7 +268,7 @@ def playCorrect(dur = 0.5):
 
 
 def playWrong(dur = 0.5):
-	tone = sound.Sound(value='wrong.wav', secs=dur, volume = 0.8,hamming = True)
+	tone = sound.Sound(value='wrong.wav', secs=dur, volume = 0.5,hamming = True)
 	# query clock time for on time
 	onTime_s = core.monotonicClock.getTime()
 	tone.play()
@@ -296,20 +300,23 @@ def runTrial(trialDict, params):
 	# clear container for keys
 	keys_pressed = []
 	# initialize keyboard buffer
-	kb = keyboard.Keyboard(device = -1)# start clock
+	kb = keyboard.Keyboard(device = -1,waitForStart=True)# start clock
 	kb.clock.reset()  # when you want to start RT timer from
-
+	kb.clearEvents()
+	kb.start() # start polling keyboard
 
 	# STIM ON: play a random sound cloud (single time step)
-	arr = np.random.randint(-100,high=100,size = 10)*.01 
+	arr = np.random.randint(-100,high=100,size = params['num_tones'])*.01 
 	trialDict['stimOn_s'],scratchtime = playSoundCloud(arr=arr, dur = params['dur_tonestep'],baseNote = params['baseNote'])
 
 	# start changing pitch stimuli. Stream sound until a response key is pressed or if we time out (set by params['responseTimeLimit_s'])
-	while ((params['buttonStr_inc'] in keys_pressed)==False) & ((params['buttonStr_dec'] in keys_pressed)==False) & (kb.clock.getTime() <= params['responseTimeLimit_s'][trialDict['block']]):
+	while (any(i in keys_pressed for i in params['buttonList_any'])==False) & (kb.clock.getTime() <= params['responseTimeLimit_s'][trialDict['block']]):
 		arr = changePitch(arr,direction = direction,change_range = params['change_range'],coherence = coherence)
 		scratchtime,offTime_s = playSoundCloud(arr=arr, dur = params['dur_tonestep'],baseNote = params['baseNote'])
 		# check if keys have been pressed
-		keys_pressed = kb.getKeys([params['buttonStr_inc'],params['buttonStr_dec']])
+		keys_pressed = kb.getKeys(params['buttonList_any'])
+
+	kb.start() # stop polling keyboard
 
 	# STIM OFF: stimulus has stopped playing, get most recent stimOff time
 	trialDict['stimOff_s'] = offTime_s
@@ -331,13 +338,13 @@ def runTrial(trialDict, params):
 
 		# process key_press (first key pressed) in relation to trial type
 		if trialDict['direction'] == 'increase':
-			if keys_pressed[0] == params['buttonStr_inc']:
+			if (keys_pressed[0] in params['buttonList_inc']):
 
 				# update trialDict
 				# note: we use two independent methods to get RT and buttonPress_s. RT should correlate with buttonPress_s - stimOn_s 
 				trialDict['correct'] = 1
 				trialDict['error'] = 0
-				trialDict['buttonPress'] = params['buttonStr_inc']
+				trialDict['buttonPress'] = keys_pressed[0].name
 				trialDict['choice'] = 'increase'
 				trialDict['buttonPress_s'] = keys_pressed[0].tDown - kb.clock.getLastResetTime()
 				trialDict['RT'] =keys_pressed[0].rt
@@ -347,12 +354,12 @@ def runTrial(trialDict, params):
 				# play feedback
 				trialDict['fbOn_s'],trialDict['fbOff_s'] = playCorrect(dur = params['dur_fb'])
 
-			elif keys_pressed[0] == params['buttonStr_dec']:
+			elif (keys_pressed[0] in params['buttonList_dec']):
 
 				# update trialDict
 				trialDict['correct'] = 0
 				trialDict['error'] = 1
-				trialDict['buttonPress'] = params['buttonStr_dec']
+				trialDict['buttonPress'] = keys_pressed[0].name
 				trialDict['choice'] = 'decrease'
 				trialDict['buttonPress_s'] = keys_pressed[0].tDown - kb.clock.getLastResetTime()
 				trialDict['RT'] =keys_pressed[0].rt
@@ -363,12 +370,12 @@ def runTrial(trialDict, params):
 				trialDict['fbOn_s'],trialDict['fbOff_s'] = playWrong(dur = params['dur_fb'])
 
 		elif trialDict['direction'] == 'decrease':
-			if keys_pressed[0] == params['buttonStr_dec']:
+			if (keys_pressed[0] in params['buttonList_dec']):
 
 				# update trialDict
 				trialDict['correct'] = 1
 				trialDict['error'] = 1
-				trialDict['buttonPress'] = params['buttonStr_dec']
+				trialDict['buttonPress'] = keys_pressed[0]
 				trialDict['choice'] = 'decrease'
 				trialDict['buttonPress_s'] = keys_pressed[0].tDown - kb.clock.getLastResetTime()
 				trialDict['RT'] =keys_pressed[0].rt
@@ -378,12 +385,12 @@ def runTrial(trialDict, params):
 
 				trialDict['fbOn_s'],trialDict['fbOff_s'] = playCorrect(dur = params['dur_fb'])	
 
-			elif keys_pressed[0] == params['buttonStr_inc']:
+			elif (keys_pressed[0] in params['buttonList_inc']):
 
 				# update trialDict
 				trialDict['correct'] = 0
 				trialDict['error'] = 1
-				trialDict['buttonPress'] = params['buttonStr_inc']
+				trialDict['buttonPress'] = keys_pressed[0]
 				trialDict['choice'] = 'increase'
 				trialDict['buttonPress_s'] = keys_pressed[0].tDown - kb.clock.getLastResetTime()
 				trialDict['RT'] =keys_pressed[0].rt
