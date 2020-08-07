@@ -21,12 +21,14 @@ params = {}
 # sound cloud parameters
 #Base note. #C4 = 261, A4 = 440
 #https://pages.mtu.edu/~suits/notefreqs.html
-params['baseNote'] = 300 
-params['change_range'] = (.1,.2) # amount of change per time step, in freq indices
-params['num_tones'] = 10
+params['baseNote'] = 440 
+params['change_range'] = (2,8) # amount of change per time step, in half steps
+params['num_tones'] = 10 # number of tones to play simultaneously
+params['toneRange_low'] = -9 # num half steps below baseNote
+params['toneRange_high'] = 63 # num half steps above baseNote
 
 # timing parameters
-params['dur_tonestep'] = 0.15
+params['dur_tonestep'] = 0.05
 params['dur_orient'] = .5
 params['dur_fb'] = 2
 
@@ -47,12 +49,12 @@ params['options_shuffleTrialsAcrossBlocks'] = False # sets whether or not to shu
 params['num_trials'] = 10 #25; this is the number of trials for each condition (total trials is this value x 8 )
 
 # responseTime limit varies by block (as a method to implement SAT)
-params['responseTimeLimit_s']={'fast':5, 'slow':10} 
+params['responseTimeLimit_s']={'fast':10, 'slow':10} 
 
 # block list
 params['block_list'] = ['fast','slow'] 
 
-params['coherence_list'] = [1,.6] # [.5 - 1]
+params['coherence_list'] = [1,.1] # [.5 - 1]
 params['direction_list'] = ['increase','decrease']
 
 # trial fields (rt is also in sec)
@@ -129,43 +131,37 @@ def load_pickle(fpath):
 
 # index (-1 to 1) to frequency
 def ind2freq(x,baseNote = 440):
-	# Generate audible frequencies based on index value surrounding the base note
-	# y = baseNote + 200 x 
+	# Generate frequencies of the equal tempered scale based on an index value that corresponds to half notes. 12 half notes is an octave
+
+	#https://pages.mtu.edu/~suits/NoteFreqCalcs.html
+
+	# newNote = baseNote * (a)^x
+
+	#baseNote is the reference note
+	#x is the number of halfsteps away from the reference note. Negative notes are lower frequencies and positive ns are higher frequencies
+	#a is a constant. a = 2**(1/12) ~ 1.05...
 
 
-	# 440 is A note, octave 4. Taken from 
-	#http://hplgit.github.io/primer.html/doc/pub/diffeq/._diffeq-solarized002.html
+	# Inputs
+    #baseNote is the reference note (baseNote = 440 is A note, octave 4)
+
+
 
 	# input:
 	# x (-1 (indexes lowest) to 1 (indexes highest)). This is 240 Hz to 640 for a baseNote of A (440 Hz)
 
 	# Returns:
 	# y ... freq value associated with index
-
-	y = baseNote + 200*x
+	a = 2**(1/12)
+	y = baseNote * a**x
 
 	return y 
-# frequency to index
-def freq2ind(y,baseNote):
-	# Generate a frequency index from a frequency value. Accepts frequency values between 250 Hz and 640 Hz
-	# y = 440 + 200 x 
-	# 440 is A note, octave 4. Taken from 
-	#http://hplgit.github.io/primer.html/doc/pub/diffeq/._diffeq-solarized002.html
-
-	# input:
-	# y =  frequency values between 250 Hz and 640 Hz
-	# Returns:
-	# x ... index value associated with frequency
-
-	x = (y - baseNote)/200
-
-	return x 
 
 # play a sound cloud
 def playSoundCloud(arr, dur = 0.5,baseNote = 440):
 	# Simultaneously plays n tones. n is set by the length of the array thats provided as input. 
 	#Inputs
-	# arr ... array (of length n) of indices (-1 to 1) selecting tones to play siultaneously. Maximum length is 10
+	# arr ... array (of length n integers (positive and negative) selecting tones to play siultaneously. arr = [1] would play a single tone one half step up from the baseNote. arr = -1 woudl play a tone half step lower. Maximum length is 10
 	tone_list = []
 
 	for i in np.arange(0,len(arr)):
@@ -204,38 +200,45 @@ def playSoundCloud(arr, dur = 0.5,baseNote = 440):
 	#
 	return onTime_s, offTime_s
 # adjust pitch for a time step
-def changePitch(arr,direction = 'increase',change_range = (0,.5),coherence = 0.9):
-	# this function takes a array of freq indices (describing a sound cloud) and adds some unit of pitch to each tone. Randomly generates a unit change for each tone.  
+def changePitch(arr,direction = 'increase',change_range = (0,6),coherence = 0.9):
+	# this function takes a array of freq indices (describing a sound cloud) and adds some unit change of pitch to each tone. 1 unit change = 1 half note. 12 half notes is an octave
 	# Inputs 
 	# arr ... array of freq indices
 	# direction ... 'increase' or 'decrease'. Sets the overall direction of change
-	# change_range ... tuple, sets range from which to draw values. The sign of both values should be positive (e.g (0,0.5)). It implements increases and decreases by considering coherence
-
-	# coherence ... proportion of tones that are changing in the same direction
+	# change_range ... tuple, sets range from which to draw values. The sign of both values should be positive (e.g (0,6)). It implements increases and decreases by reading the "direction" input
+	# coherence ... proportion of tones that are changing in the concordance with the direction (increase or decrease)
 
 	# Returns
 	# arr ... modified array
 
-	# create change_array with absolute change values 
-	# np
-	change_array = np.absolute(np.random.randint(low = 100*change_range[0], high = 100*change_range[1],size = len(arr))*.01)
+	# create change_array. Absolute value is to ensure that we only are calculating the size of change
+	#change_array = np.absolute(np.random.randint(low = change_range[0], high = change_range[1],size = len(arr)))
+	change_array = np.ones(len(arr))*(np.random.randint(low = change_range[0], high = change_range[1],size = 1))
+
 
 	# select coherent indices
 	num_coherent = np.round(coherence*len(arr)).astype('int')
 
+
+	# change num_coherent indices of the arry based on the direction
 	if direction == 'increase':
-		# change the sign of remaining values (that will be incoherent) to negative 1
-		change_array[num_coherent:] = -1*change_array[num_coherent:] 
+		arr[:num_coherent] = arr[:num_coherent] + change_array[:num_coherent] 
 	elif direction == 'decrease':
-		# change the sign of the coherent values to negative 1
-		change_array[:num_coherent] = -1*change_array[:num_coherent]
+		arr[:num_coherent] = arr[:num_coherent] - change_array[:num_coherent] 
+
+
+	# resample the rest of the elements of the array from a random distribution
+	arr[num_coherent:] = np.random.randint(params['toneRange_low'],high=params['toneRange_high'],size = (len(arr)-num_coherent))
+
+	# change the sign of the coherent values to negative 1
+	#change_array[:num_coherent] = -1*change_array[:num_coherent]
 
 	# update the array
-	arr = arr + change_array
+	#arr = arr + change_array
 
-	# deal with values > 1 or < -1, by reseting them to random value from -1 to 1
-	overflow_idx = np.absolute(arr)>1
-	arr[overflow_idx] = np.random.randint(-100,high=100,size = np.count_nonzero(overflow_idx))*.01 
+	# deal with values > toneRange_high or < toneRange_low, by reseting them to random value from -1 to 1
+	overflow_idx = (arr > params['toneRange_high']) | (arr < params['toneRange_low'])
+	arr[overflow_idx] = np.random.randint(params['toneRange_low'],high=params['toneRange_high'],size = np.count_nonzero(overflow_idx))
 
 	return arr
 # Sounds from file
@@ -306,7 +309,7 @@ def runTrial(trialDict, params):
 	kb.start() # start polling keyboard
 
 	# STIM ON: play a random sound cloud (single time step)
-	arr = np.random.randint(-100,high=100,size = params['num_tones'])*.01 
+	arr = np.random.randint(params['toneRange_low'],high=params['toneRange_high'],size = params['num_tones']) 
 	trialDict['stimOn_s'],scratchtime = playSoundCloud(arr=arr, dur = params['dur_tonestep'],baseNote = params['baseNote'])
 
 	# start changing pitch stimuli. Stream sound until a response key is pressed or if we time out (set by params['responseTimeLimit_s'])

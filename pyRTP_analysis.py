@@ -19,15 +19,18 @@ matplotlib.rcParams['axes.ymargin'] = 0
 from pylab import *
 close('all') 
 
+from matplotlib.backends.backend_pdf import PdfPages
+
 # Define Functions
 
 # load task_df and config
 def loadData(subj,sessNum):
-    sesspath_data = os.getcwd()+'/data/'+subj+'/session'+str(sessNum)+'/data.csv'
-    sesspath_config = os.getcwd()+'/data/'+subj+'/session'+str(sessNum)+'/config.csv'
+    savedir = os.getcwd()+'/data/'+subj+'/session'+str(sessNum)+'/'
+    sesspath_data = savedir+'data.csv'
+    sesspath_config = savedir+'config.csv'
     task_df = pd.read_csv(sesspath_data,index_col ='trial')
     config_df = pd.read_csv(sesspath_config,index_col ='parameter')
-    return task_df,config_df
+    return task_df,config_df,savedir
 
 
 # getRTs
@@ -128,14 +131,14 @@ def set_axes_rt(ax, plot_type = 'standard',legend_fontsize = 10):
 
     if plot_type in ['standard','reciprocal']:
         # set labels
-        ax.set_xlabel('RT (ms)')
+        ax.set_xlabel('RT (s)')
         ax.set_ylabel('Count')
     elif plot_type == 'zrrt':
         ax.set_xlabel('z(-1/RT)')
         ax.set_ylabel('Count')
     elif plot_type == 'reciprobit':
         # set labels
-        ax.set_xlabel('RT (ms)')
+        ax.set_xlabel('RT (s)')
         ax.set_ylabel('z-score Cumulative probability')
 
     # set label
@@ -194,28 +197,116 @@ def plot_RT_by_condition(task_df,condition = 'coherence',bins = 20, evQuery=None
     # set axes
     set_axes_rt(ax=ax_list[1],plot_type = plot_type)
 
+def plotPsychometric_choice(task_df,blockQuery,query_list,lbl_list):
+    f = figure()
+
+    # filter block
+    task_df_filt = task_df.query(blockQuery)  
+
+    # init containers
+    p_inc_list = []
+
+    for q in query_list:
+        task_df1 = task_df_filt.query(q)
+
+        # y axis = prob increase
+        p_inc_list.append(count_nonzero(task_df1.eval('choice=="increase"').to_numpy())/len(task_df1)) 
+    
+    # plot prob left 
+    plot(np.arange(0,len(p_inc_list)),p_inc_list,marker = 'x',markersize = 10,markeredgewidth=3,linestyle=None,linewidth = 0)
+    title(blockQuery)
+    xlabel('Coherence')
+    ylabel('Prob(Right)')
+    xticks(arange(0,len(query_list)),lbl_list)
+
+def plotPsychometric_rt(task_df,blockQuery,query_list,lbl_list):
+    f = figure()
+
+    # filter block
+    task_df_filt = task_df.query(blockQuery)  
+
+    # init containers
+    rt_mean_list = []
+    rt_sem_list = []
+
+    for q in query_list:
+        task_df1 = task_df_filt.query(q)
+
+        # y axis = prob increase
+        rt_mean_list.append(task_df1['RT'].mean())
+        rt_sem_list.append(task_df1['RT'].sem())
+
+
+    # plot prob left 
+    errorbar(np.arange(0,len(rt_mean_list)),rt_mean_list,rt_sem_list)
+    title(blockQuery)
+    xlabel('Coherence')
+    ylabel('RT(s)')
+    xticks(arange(0,len(query_list)),lbl_list)
+
+
+
 ##### RUN SCRIPT
 subj = input ("Enter Subject ID :") 
 sessNum = input ("Enter Session number:") 
 
 # load data
-task_df,config_df = loadData(subj,sessNum)
+task_df,config_df,savedir = loadData(subj,sessNum)
+
+#plot psychometric functions - choice
+# init lists
+coherence_list = np.unique(task_df['coherence'].to_numpy())
+direction_list = np.unique(task_df['direction'].to_numpy())
+query_list = []
+lbl_list = []
+# populate decreases
+d = 'decrease'
+for c in np.flip(coherence_list):
+    query_list.append('coherence =='+str(c)+'& direction == "'+d +'"')
+    lbl_list.append(d[:3]+'_coh'+str(c))
+    # populate decreases
+d = 'increase'
+for c in coherence_list:
+    query_list.append('coherence =='+str(c)+'& direction == "'+d +'"')
+    lbl_list.append(d[:3]+'_coh'+str(c))
+
+with PdfPages(savedir+'sess_results.pdf') as pdf:
+
+    # slow trials
+    plotPsychometric_choice(task_df,blockQuery= 'block=="fast"',query_list=query_list,lbl_list=lbl_list)
+    pdf.savefig()
+
+    plotPsychometric_rt(task_df,blockQuery= 'block=="fast"',query_list=query_list,lbl_list=lbl_list)
+    pdf.savefig()
+
+    # slow trials
+    plotPsychometric_choice(task_df,blockQuery= 'block=="slow"',query_list=query_list,lbl_list=lbl_list)
+    pdf.savefig()
+
+    plotPsychometric_rt(task_df,blockQuery= 'block=="slow"',query_list=query_list,lbl_list=lbl_list)
+    pdf.savefig()
 
 
-# plot RTs
+    # plot it
+    plot_RT_by_condition(task_df,condition = 'coherence',bins = 20,evQuery = 'RT>0',plot_type = 'standard')
+    pdf.savefig()
 
-#plotRT(task_df,bins = 10,evQuery = 'RT>0',plot_type = 'standard')
-#plotRT(task_df,bins = 10,evQuery = 'RT>0',plot_type = 'reciprocal')
-#plotRT(task_df,bins = 10,evQuery = 'RT>0',plot_type = 'reciprobit')
+    plot_RT_by_condition(task_df,condition = 'coherence',bins = 20,evQuery = 'RT>0',plot_type = 'reciprocal')
+    pdf.savefig()
 
-# plot it
-plot_RT_by_condition(task_df,condition = 'coherence',bins = 10,evQuery = 'RT>0',plot_type = 'standard')
-plot_RT_by_condition(task_df,condition = 'coherence',bins = 10,evQuery = 'RT>0',plot_type = 'reciprocal')
-plot_RT_by_condition(task_df,condition = 'coherence',bins = 10,evQuery = 'RT>0',plot_type = 'reciprobit')
+    plot_RT_by_condition(task_df,condition = 'coherence',bins = 20,evQuery = 'RT>0',plot_type = 'reciprobit')
+    pdf.savefig()
 
-plot_RT_by_condition(task_df,condition = 'block',bins = 10,evQuery = 'RT>0',plot_type = 'standard')
-plot_RT_by_condition(task_df,condition = 'block',bins = 10,evQuery = 'RT>0',plot_type = 'reciprocal')
-plot_RT_by_condition(task_df,condition = 'block',bins = 10,evQuery = 'RT>0',plot_type = 'reciprobit')
+    plot_RT_by_condition(task_df,condition = 'block',bins = 20,evQuery = 'RT>0',plot_type = 'standard')
+    pdf.savefig()
+
+
+    plot_RT_by_condition(task_df,condition = 'block',bins = 20,evQuery = 'RT>0',plot_type = 'reciprocal')
+    pdf.savefig()
+
+    plot_RT_by_condition(task_df,condition = 'block',bins = 20,evQuery = 'RT>0',plot_type = 'reciprobit')
+    pdf.savefig()
+
 
 
 
