@@ -1,9 +1,13 @@
+#pyRTP. Random Tone Pitch Task as described
+#Mulder, M. J., Keuken, M. C., van Maanen, L., Boekel, W., Forstmann, B. U., & Wagenmakers, E. J. (2013). The speed and accuracy of perceptual decisions in a random-tone pitch task. Attention, Perception, & Psychophysics, 75(5), 1048-1058.
+
+#written by Ashwin Ramayya (ashwinramayya@gmail.com)
+# Random Tone
 import psychtoolbox as ptb
 import numpy as np
 import pandas as pd
 import pickle
 import os
-
 
 # set audio driver to psychtoolbox
 from psychopy import prefs,visual,core # monotonicClock starts when we import this 
@@ -18,19 +22,35 @@ from psychopy import sound
 # SET CONFIG PARAMETERS:`
 params = {}
 
+# options
+params['options_sendSYNC'] = False
+print('SYNC pulses will NOT be sent...')
+params['SYNC_volt'] = 1.5 # 1.5 V pulse
+params['SYNC_pulse_val'] = None  # this is populated after getting calibration data
+params['SYNC_zero_val'] = None 
+
+params['options_playOrientOnEachTrial'] = False # show orientation sound on each trial
+params['options_showFixation'] = False # show fixation cross 
+params['options_shuffleTrialsAcrossBlocks'] = False # sets whether or not to shuffle trials across blocks. If set to true, it will randomly present trials and lose the block design. Set to FALSE by default
+
+# trial parameters (will create appropriate combinations of these parameters 
+params['num_trials'] = 10 #25; this is the number of trials for each condition (total trials is this value x 8 )
+
 # sound cloud parameters
 #Base note. #C4 = 261, A4 = 440
 #https://pages.mtu.edu/~suits/notefreqs.html
 params['baseNote'] = 440 
-params['change_range'] = (2,8) # amount of change per time step, in half steps
-params['num_tones'] = 10 # number of tones to play simultaneously
-params['toneRange_low'] = -9 # num half steps below baseNote
-params['toneRange_high'] = 63 # num half steps above baseNote
+params['change_range'] = (2,8) # range of change per time step, in half steps. Coherent sounds will change between one and four notes on each step 
+params['num_tones'] = 10 # number of tones to play simultaneously (max = 10)
+params['toneRange_low'] = -9 # num half steps below baseNote, (-9, with base note of 440 corresponds to C4, 260 Hz)
+params['toneRange_high'] = 63 # num half steps above baseNote(63, with base note of 440 corresponds to C10, 16744 Hz)
+
 
 # timing parameters
-params['dur_tonestep'] = 0.05
-params['dur_orient'] = .5
-params['dur_fb'] = 2
+params['dur_tonestep'] = 0.05 # time to play each sound cloud in sec (default = 50 ms)
+params['dur_orient'] = .5 # time in seconds to play orientation sound
+params['dur_fb'] = 1.5 # time in seconds to play feedback
+params['dur_waitforsync'] = .5 # time in seconds to wait for sync pulses to send at the end of the trial
 
 # button list
 # (return, up) are (right and left) for the button box
@@ -39,34 +59,24 @@ params['buttonList_dec'] = ['lshift','up']
 params['buttonList_any'] = params['buttonList_inc'][:]
 params['buttonList_any'].extend(params['buttonList_dec'] )
 
-# options
-params['options_playOrientOnEachTrial'] = False
-params['options_showFixation'] = False
-params['options_shuffleTrialsAcrossBlocks'] = False # sets whether or not to shuffle trials across blocks. If set to true, it will randomly present trials and lose the block design. Set to FALSE by default
-# print instructions (to be verbally explained)
-
-# trial parameters (will create appropriate combinations of these parameters 
-params['num_trials'] = 10 #25; this is the number of trials for each condition (total trials is this value x 8 )
-
 # responseTime limit varies by block (as a method to implement SAT)
 params['responseTimeLimit_s']={'fast':10, 'slow':10} 
 
 # block list
 params['block_list'] = ['fast','slow'] 
 
-params['coherence_list'] = [1,.1] # [.5 - 1]
+params['coherence_list'] = [.8,.4] # [0.1 - 1]; % of tones that change pitch coherently on each time step. Remainder of tones are randomly resampled from the tone range
+params['change_tones_together'] = True # if true, on each time step, it randomly draws a change value and applies it to all tones that are changing coherently. If False, it randomly generates a change value for each tone that is changing. 
 params['direction_list'] = ['increase','decrease']
 
-# trial fields (rt is also in sec)
-params['trial_fields'] = ['block','trialInBlock','coherence','direction','orientOn_s','orientOff_s','stimOn_s','stimOff_s','buttonPress','choice','correct','error','buttonPress_s','RT','fbOn_s','fbOff_s','TTLsent_s','wasShown']
-
+# trial dictionary fields (rt is also in sec)
+params['trial_fields'] = ['block','trialInBlock','coherence','direction','orientOn_s','orientOff_s','stimOn_s','stimOff_s','buttonPress','choice','correct','error','buttonPress_s','RT','fbOn_s','fbOff_s','wasShown','TTL1sent_s','TTL2sent_s','TTL3sent_s']
 
 # Print instructions
-print('Instructions: Guess the Pitch Trajectory.... Press RIGHT button if you think the pitch is increasing, and press LEFT button if you think the pitch is decreasing.')
+print('Instructions: Guess the Pitch Trajectory.... Press RIGHT button if you think the pitch is increasing, and press LEFT button if you think the pitch is decreasing. In FAST block, make your selection as soon as possible. In SLOW block, take your time and respond as accurately as possible')
 
 
 ### Define functions
-
 def mkDirs(params):
 	#  Save directory
 	params['saveDir'] = os.getcwd()+'/data'
@@ -115,15 +125,16 @@ def mkDirs(params):
 	# return updated params
 	return params
 
+# Pickle functions courtesy of Daniel Schonhaut
 def save_pickle(obj, fpath, verbose=True):
-    """Save object as a pickle file. Written by Dan Schonhaut. 11/2018"""
+    """Save object as a pickle file."""
     with open(fpath, 'wb') as f:
         pickle.dump(obj, f, pickle.HIGHEST_PROTOCOL)
     if verbose:
         print('Saved {}'.format(fpath))
 
 def load_pickle(fpath):
-    """Return object. Written by Dan Schonhaut. 11/2018"""
+    """Return object."""
     with open(fpath, 'rb') as f:
         obj = pickle.load(f)
     return obj
@@ -141,14 +152,11 @@ def ind2freq(x,baseNote = 440):
 	#x is the number of halfsteps away from the reference note. Negative notes are lower frequencies and positive ns are higher frequencies
 	#a is a constant. a = 2**(1/12) ~ 1.05...
 
-
 	# Inputs
     #baseNote is the reference note (baseNote = 440 is A note, octave 4)
 
-
-
 	# input:
-	# x (-1 (indexes lowest) to 1 (indexes highest)). This is 240 Hz to 640 for a baseNote of A (440 Hz)
+	#x .. number of half notes from the base note (integer, including negative values)
 
 	# Returns:
 	# y ... freq value associated with index
@@ -168,8 +176,10 @@ def playSoundCloud(arr, dur = 0.5,baseNote = 440):
 		# create a sound stimulus
 		tone_list.append(sound.Sound(value=ind2freq(arr[i],baseNote=baseNote), secs=dur, volume = 1,hamming = True))
 
-	#get on time
+	#get onset time
 	onTime_s = core.monotonicClock.getTime()
+
+	# play sound clud
 	tone_list[0].play()
 	if len(arr)>9:
 		tone_list[9].play()
@@ -197,11 +207,12 @@ def playSoundCloud(arr, dur = 0.5,baseNote = 440):
 	# get off time (just sample the first tone)
 	offTime_s = onTime_s+tone_list[0].stopTime
 
-	#
 	return onTime_s, offTime_s
 # adjust pitch for a time step
 def changePitch(arr,direction = 'increase',change_range = (0,6),coherence = 0.9):
-	# this function takes a array of freq indices (describing a sound cloud) and adds some unit change of pitch to each tone. 1 unit change = 1 half note. 12 half notes is an octave
+	# this function takes a array of freq indices (describing a sound cloud) and adds some unit change of pitch to each tone. 1 unit change = 1 half note. 12 half notes is an octave. Coherence sets the number of tones that change pitch coherently on each time step. Remainder of tones are randomly resampled from the tone range. If params['change_tones_together'] == True, n each time step, it randomly draws a change value and applies it to all tones that are changing coherently. If False, it randomly generates a change value for each tone that is changing. 
+
+
 	# Inputs 
 	# arr ... array of freq indices
 	# direction ... 'increase' or 'decrease'. Sets the overall direction of change
@@ -211,10 +222,11 @@ def changePitch(arr,direction = 'increase',change_range = (0,6),coherence = 0.9)
 	# Returns
 	# arr ... modified array
 
-	# create change_array. Absolute value is to ensure that we only are calculating the size of change
-	#change_array = np.absolute(np.random.randint(low = change_range[0], high = change_range[1],size = len(arr)))
-	change_array = np.ones(len(arr))*(np.random.randint(low = change_range[0], high = change_range[1],size = 1))
-
+	# create change_array. Absolute value is to ensure that we only are calculating the size of change, not the direction here.
+	if params['change_tones_together'] == True:
+		change_array = np.absolute(np.ones(len(arr))*(np.random.randint(low = change_range[0], high = change_range[1],size = 1)))
+	else:
+		change_array = np.absolute(np.random.randint(low = change_range[0], high = change_range[1],size = len(arr)))
 
 	# select coherent indices
 	num_coherent = np.round(coherence*len(arr)).astype('int')
@@ -299,6 +311,7 @@ def runTrial(trialDict, params):
 		
 		#play orient sound
 		trialDict['orientOn_s'],trialDict['orientOff_s'] = playOrient(dur = params['dur_orient'])
+
 
 	# clear container for keys
 	keys_pressed = []
@@ -402,6 +415,23 @@ def runTrial(trialDict, params):
 				print('Incorrect! pitch is decreasing with coherence = ',trialDict['coherence'],' RT = ', keys_pressed[0].rt)
 				trialDict['fbOn_s'],trialDict['fbOff_s'] = playWrong(dur = params['dur_fb'])
 
+	# send a SYNC pulse 
+	if params['options_sendSYNC'] == True:
+		trialDict['TTL1sent_s'] = core.monotonicClock.getTime() 
+		d.getFeedback(u3.DAC0_8(params['SYNC_pulse_val']))
+		d.getFeedback(u3.DAC0_8(params['SYNC_zero_val']))
+	
+		trialDict['TTL2sent_s'] = core.monotonicClock.getTime() 
+		d.getFeedback(u3.DAC0_8(params['SYNC_pulse_val']))
+		d.getFeedback(u3.DAC0_8(params['SYNC_zero_val']))
+	
+		trialDict['TTL3sent_s'] = core.monotonicClock.getTime() 
+		d.getFeedback(u3.DAC0_8(params['SYNC_pulse_val']))
+		d.getFeedback(u3.DAC0_8(params['SYNC_zero_val']))
+
+		# wait for sync pulses to finish
+		core.wait(0.5)
+
 	# return updated trialDict
 	return trialDict
 
@@ -478,16 +508,37 @@ def generateTrialList(params):
 	# return list of dictionaries
 	return trialDict_list
 
+def initializeLabjack(params):
+	# Initialize labjack device object and get calibration data. 
+	if params['options_sendSYNC'] == True:
+		from labjack import u3
+		try:
+			d = u3.U3()
+			d = d.getCalibrationData()
+			
+			params['SYNC_pulse_val'] =  d.voltageToDACBits(params['SYNC_volt'], dacNumber = 0, is16Bits = False)
+			params['SYNC_zero_val'] =  d.voltageToDACBits(0, dacNumber = 0, is16Bits = False)
+
+
+			print('Sync pulses are sent from the DAC0 channel. Connect cathode (red wire) to DAC0 and annode (black wire) to ground.')
+
+		except:
+			print('Unable to open LABJACK. Check if it is connected. If not using sync pulses, set "options_sendSYNC" to False')
+			core.quit()
+
+	# returns updated params
+	return params
 
 #### RUN TASK
-
-
-
-# GENERATE SUBJECT AND SESSION ID and Make directories
+# GENERATE SUBJECT AND SESSION ID AND MAKE DIRECTORIEs
 params = mkDirs(params)
 
 
-# Display fixation cross
+# INITIALIZE LABJACK
+params = initializeLabjack(params)
+
+
+# DISPLAY FIXATION CROSS
 if params['options_showFixation'] == True:
 	#open a window and display a fixation cross
 	# open window
@@ -503,7 +554,7 @@ if params['options_showFixation'] == True:
 	params['fixOn_s'] = win.flip() # this records when the fixation cross was displayed at the beginning of the session
 
 
-# Pickle data so we can pick up where we left off if we are restarting the session
+# RUN THROUGH TRIALS. Will pick up from last shown trial if we have already run this subject/session before. 
 
 # check for a saved trialDict_list
 params['savefilepath'] = params['sessDir']+'/'+'taskData'
@@ -519,10 +570,10 @@ if os.path.exists(params['savefilepath']) == True:
 	tStart = np.nonzero(np.isnan(wasShown)==False)[0][-1] 
 
 else:
-	# create a list of trials and set tStart to 0
+	# There is no saved task data
+	# create a fresh list of trials and set tStart to 0
 	trialDict_list = generateTrialList(params)
 	tStart = 0
-	#print(pd.DataFrame(trialDict_list))
 
 # loop through trial list
 for t in np.arange(tStart,len(trialDict_list)):
@@ -530,18 +581,20 @@ for t in np.arange(tStart,len(trialDict_list)):
 	# print block
 	print(trialDict_list[t]['block'])
 
-	# check if we are in a block design
+	# check if we are in a block design, so we can cue each block
 	if params['options_shuffleTrialsAcrossBlocks'] == False:
-		# we are in a block design
+
+		# we are in a block design, cue each block start
 		if t == 0:
 			#this is the first trial, ask if we can start block
 			trialDict_list[t]['orientOn_s'],trialDict_list[t]['orientOff_s'] = playOrient(dur = params['dur_orient'])
-			input('Press any key to start '+trialDict_list[t]['block']+' block')
+			input('Press ENTER to start '+trialDict_list[t]['block']+' block')
+
 		elif trialDict_list[t]['block']!=trialDict_list[t-1]['block']:
 			trialDict_list[t]['orientOn_s'],trialDict_list[t]['orientOff_s'] = playOrient(dur = params['dur_orient'])
 			#this is the first trial, ask if we can start block
 			playOrient()
-			input('Press any key to start '+trialDict_list[t]['block']+' block')
+			input('Press ENTER to start '+trialDict_list[t]['block']+' block')
 
 	# run a trial
 	trialDict_list[t] = runTrial(trialDict_list[t],params)
@@ -563,11 +616,6 @@ config_df = pd.Series(params)
 config_df.index.name = 'parameter'
 config_df.name = 'value'
 config_df.to_csv(path_or_buf = params['sessDir']+'/config.csv')
-
-# display summary data
-
-# make a figure 
-
 
 # wait for clean up
 core.wait(3)

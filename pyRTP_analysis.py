@@ -1,4 +1,4 @@
-# RTP_analysis (Random Tone Pitch Analysis). Performs basic RT analysis on behavioral data
+# RTP_analysis (Random Tone Pitch Analysis). Performs basic RT analysis on behavioral data. Saves a multi-page pdf summarizing results in the session folder
 
 import numpy as np
 import pandas as pd
@@ -8,18 +8,22 @@ from scipy import stats
 
 # plot in separate windows, interactive
 import matplotlib
-matplotlib.use('macosx')
+#matplotlib.use('macosx')
 
 matplotlib.rcParams['interactive'] = True
 matplotlib.rcParams['axes.autolimit_mode'] = 'round_numbers'
 matplotlib.rcParams['axes.xmargin'] = 0
 matplotlib.rcParams['axes.ymargin'] = 0
 
-# plotting
-from pylab import *
-close('all') 
-
 from matplotlib.backends.backend_pdf import PdfPages
+
+
+
+# plotting
+import matplotlib.pyplot as plt 
+#from pylab import *
+#close('all') 
+
 
 # Define Functions
 
@@ -81,8 +85,8 @@ def plotRT(task_df, evQuery = None, ax = None,plot_type = 'standard', bins = 40,
 
     # parse fig,ax
     if ax==None:
-        fig = figure(figsize=(5,5))
-        ax = subplot(111)
+        fig = plt.figure(figsize=(5,5))
+        ax = plt.subplot(111)
 
     # plot RT dist for various formats
     if plot_type == 'reciprobit': # plot reciprobit plot -SPECIAL CASE
@@ -158,7 +162,7 @@ def plot_RT_by_condition(task_df,condition = 'coherence',bins = 20, evQuery=None
         fig_params.update(fig_params_dict)
 
     if ax == None:
-        fig = figure(figsize=(fig_params['figsize'][0],fig_params['figsize'][1]))
+        fig = plt.figure(figsize=(fig_params['figsize'][0],fig_params['figsize'][1]))
 
     # set title
     fig.suptitle(fig_params['title'],fontsize=fig_params['title_fontsize'])
@@ -167,8 +171,8 @@ def plot_RT_by_condition(task_df,condition = 'coherence',bins = 20, evQuery=None
     # create axes
     if ax == None:
         ax_list = [] 
-        ax_list.append(subplot(1,2,1))
-        ax_list.append(subplot(1,2,2))
+        ax_list.append(plt.subplot(1,2,1))
+        ax_list.append(plt.subplot(1,2,2))
 
 
     # plot RT
@@ -198,7 +202,7 @@ def plot_RT_by_condition(task_df,condition = 'coherence',bins = 20, evQuery=None
     set_axes_rt(ax=ax_list[1],plot_type = plot_type)
 
 def plotPsychometric_choice(task_df,blockQuery,query_list,lbl_list):
-    f = figure()
+    f = plt.figure()
 
     # filter block
     task_df_filt = task_df.query(blockQuery)  
@@ -210,17 +214,17 @@ def plotPsychometric_choice(task_df,blockQuery,query_list,lbl_list):
         task_df1 = task_df_filt.query(q)
 
         # y axis = prob increase
-        p_inc_list.append(count_nonzero(task_df1.eval('choice=="increase"').to_numpy())/len(task_df1)) 
+        p_inc_list.append(np.count_nonzero(task_df1.eval('choice=="increase"').to_numpy())/len(task_df1)) 
     
     # plot prob left 
-    plot(np.arange(0,len(p_inc_list)),p_inc_list,marker = 'x',markersize = 10,markeredgewidth=3,linestyle=None,linewidth = 0)
-    title(blockQuery)
-    xlabel('Coherence')
-    ylabel('Prob(Right)')
-    xticks(arange(0,len(query_list)),lbl_list)
+    plt.plot(np.arange(0,len(p_inc_list)),p_inc_list,marker = 'x',markersize = 10,markeredgewidth=3,linestyle=None,linewidth = 0)
+    plt.title(blockQuery)
+    plt.xlabel('Coherence')
+    plt.ylabel('Prob(Right)')
+    plt.xticks(np.arange(0,len(query_list)),lbl_list)
 
 def plotPsychometric_rt(task_df,blockQuery,query_list,lbl_list):
-    f = figure()
+    f = plt.figure()
 
     # filter block
     task_df_filt = task_df.query(blockQuery)  
@@ -238,11 +242,11 @@ def plotPsychometric_rt(task_df,blockQuery,query_list,lbl_list):
 
 
     # plot prob left 
-    errorbar(np.arange(0,len(rt_mean_list)),rt_mean_list,rt_sem_list)
-    title(blockQuery)
-    xlabel('Coherence')
-    ylabel('RT(s)')
-    xticks(arange(0,len(query_list)),lbl_list)
+    plt.errorbar(np.arange(0,len(rt_mean_list)),rt_mean_list,rt_sem_list)
+    plt.title(blockQuery)
+    plt.xlabel('Coherence')
+    plt.ylabel('RT(s)')
+    plt.xticks(np.arange(0,len(query_list)),lbl_list)
 
 
 
