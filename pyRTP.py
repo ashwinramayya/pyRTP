@@ -9,32 +9,41 @@ import pandas as pd
 import pickle
 import os
 
+# import sound
+import psychopy
+psychopy.prefs.hardware['audioLib'] = ['PTB']
+from psychopy import visual,core,sound
+
+
 # set audio driver to psychtoolbox
-from psychopy import prefs,visual,core # monotonicClock starts when we import this 
+#from psychopy import prefs,visual,core # monotonicClock starts when we import this 
+
 # import keyboard
 import psychopy.hardware.keyboard as keyboard
 
-# import sound
-prefs.hardware['audioLib'] = ['PTB']
-from psychopy import sound
 
 
 # SET CONFIG PARAMETERS:`
 params = {}
 
 # options
-params['options_sendSYNC'] = False
-print('SYNC pulses will NOT be sent...')
+params['options_sendSYNC'] = True
+if params['options_sendSYNC']==False:
+	print('SYNC pulses will NOT be sent...')
+else:
+	from labjack import u3
+
 params['SYNC_volt'] = 1.5 # 1.5 V pulse
 params['SYNC_pulse_val'] = None  # this is populated after getting calibration data
 params['SYNC_zero_val'] = None 
+params['SYNC_deviceObj'] = None
 
 params['options_playOrientOnEachTrial'] = False # show orientation sound on each trial
 params['options_showFixation'] = False # show fixation cross 
 params['options_shuffleTrialsAcrossBlocks'] = False # sets whether or not to shuffle trials across blocks. If set to true, it will randomly present trials and lose the block design. Set to FALSE by default
 
 # trial parameters (will create appropriate combinations of these parameters 
-params['num_trials'] = 10 #25; this is the number of trials for each condition (total trials is this value x 8 )
+params['num_trials'] = 25 #25; this is the number of trials for each condition (total trials is this value x 8 )
 
 # sound cloud parameters
 #Base note. #C4 = 261, A4 = 440
@@ -172,7 +181,10 @@ def playSoundCloud(arr, dur = 0.5,baseNote = 440):
 	# arr ... array (of length n integers (positive and negative) selecting tones to play siultaneously. arr = [1] would play a single tone one half step up from the baseNote. arr = -1 woudl play a tone half step lower. Maximum length is 10
 	tone_list = []
 
+
+
 	for i in np.arange(0,len(arr)):
+
 		# create a sound stimulus
 		tone_list.append(sound.Sound(value=ind2freq(arr[i],baseNote=baseNote), secs=dur, volume = 1,hamming = True))
 
@@ -315,6 +327,7 @@ def runTrial(trialDict, params):
 
 	# clear container for keys
 	keys_pressed = []
+
 	# initialize keyboard buffer
 	kb = keyboard.Keyboard(device = -1,waitForStart=True)# start clock
 	kb.clock.reset()  # when you want to start RT timer from
@@ -324,6 +337,7 @@ def runTrial(trialDict, params):
 	# STIM ON: play a random sound cloud (single time step)
 	arr = np.random.randint(params['toneRange_low'],high=params['toneRange_high'],size = params['num_tones']) 
 	trialDict['stimOn_s'],scratchtime = playSoundCloud(arr=arr, dur = params['dur_tonestep'],baseNote = params['baseNote'])
+
 
 	# start changing pitch stimuli. Stream sound until a response key is pressed or if we time out (set by params['responseTimeLimit_s'])
 	while (any(i in keys_pressed for i in params['buttonList_any'])==False) & (kb.clock.getTime() <= params['responseTimeLimit_s'][trialDict['block']]):
@@ -418,16 +432,16 @@ def runTrial(trialDict, params):
 	# send a SYNC pulse 
 	if params['options_sendSYNC'] == True:
 		trialDict['TTL1sent_s'] = core.monotonicClock.getTime() 
-		d.getFeedback(u3.DAC0_8(params['SYNC_pulse_val']))
-		d.getFeedback(u3.DAC0_8(params['SYNC_zero_val']))
+		params['SYNC_deviceObj'].getFeedback(u3.DAC0_8(params['SYNC_pulse_val']))
+		params['SYNC_deviceObj'].getFeedback(u3.DAC0_8(params['SYNC_zero_val']))
 	
 		trialDict['TTL2sent_s'] = core.monotonicClock.getTime() 
-		d.getFeedback(u3.DAC0_8(params['SYNC_pulse_val']))
-		d.getFeedback(u3.DAC0_8(params['SYNC_zero_val']))
+		params['SYNC_deviceObj'].getFeedback(u3.DAC0_8(params['SYNC_pulse_val']))
+		params['SYNC_deviceObj'].getFeedback(u3.DAC0_8(params['SYNC_zero_val']))
 	
 		trialDict['TTL3sent_s'] = core.monotonicClock.getTime() 
-		d.getFeedback(u3.DAC0_8(params['SYNC_pulse_val']))
-		d.getFeedback(u3.DAC0_8(params['SYNC_zero_val']))
+		params['SYNC_deviceObj'].getFeedback(u3.DAC0_8(params['SYNC_pulse_val']))
+		params['SYNC_deviceObj'].getFeedback(u3.DAC0_8(params['SYNC_zero_val']))
 
 		# wait for sync pulses to finish
 		core.wait(0.5)
@@ -511,13 +525,12 @@ def generateTrialList(params):
 def initializeLabjack(params):
 	# Initialize labjack device object and get calibration data. 
 	if params['options_sendSYNC'] == True:
-		from labjack import u3
 		try:
-			d = u3.U3()
-			d = d.getCalibrationData()
+			params['SYNC_deviceObj'] = u3.U3()
+			params['SYNC_deviceObj'].getCalibrationData()
 			
-			params['SYNC_pulse_val'] =  d.voltageToDACBits(params['SYNC_volt'], dacNumber = 0, is16Bits = False)
-			params['SYNC_zero_val'] =  d.voltageToDACBits(0, dacNumber = 0, is16Bits = False)
+			params['SYNC_pulse_val'] =  params['SYNC_deviceObj'].voltageToDACBits(params['SYNC_volt'], dacNumber = 0, is16Bits = False)
+			params['SYNC_zero_val'] =  params['SYNC_deviceObj'].voltageToDACBits(0, dacNumber = 0, is16Bits = False)
 
 
 			print('Sync pulses are sent from the DAC0 channel. Connect cathode (red wire) to DAC0 and annode (black wire) to ground.')
@@ -533,6 +546,7 @@ def initializeLabjack(params):
 # GENERATE SUBJECT AND SESSION ID AND MAKE DIRECTORIEs
 params = mkDirs(params)
 
+# try this
 
 # INITIALIZE LABJACK
 params = initializeLabjack(params)
@@ -595,6 +609,7 @@ for t in np.arange(tStart,len(trialDict_list)):
 			#this is the first trial, ask if we can start block
 			playOrient()
 			input('Press ENTER to start '+trialDict_list[t]['block']+' block')
+
 
 	# run a trial
 	trialDict_list[t] = runTrial(trialDict_list[t],params)
