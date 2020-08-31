@@ -23,7 +23,7 @@ from labjack import u3
 
 # params dict 
 params = {}
-params['numTrials'] = 10
+params['numTrials'] = 30
 
 
 params['SYNC_useDigitalOut'] = True

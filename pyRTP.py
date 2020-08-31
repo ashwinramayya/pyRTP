@@ -78,7 +78,7 @@ params['responseTimeLimit_s']={'fast':10, 'slow':10}
 # block list
 params['block_list'] = ['fast','slow'] 
 
-params['coherence_list'] = [1,.4] # [0.1 - 1]; % of tones that change pitch coherently on each time step. Remainder of tones are randomly resampled from the tone range
+params['coherence_list'] = [0.8,0.4] # [0.1 - 1]; % of tones that change pitch coherently on each time step. Remainder of tones are randomly resampled from the tone range
 params['change_tones_together'] = True # if true, on each time step, it randomly draws a change value and applies it to all tones that are changing coherently. If False, it randomly generates a change value for each tone that is changing. 
 params['direction_list'] = ['increase','decrease']
 
@@ -193,7 +193,7 @@ def playSoundCloud(arr, dur = 0.5,baseNote = 440):
         # create a sound stimulus
         tone_list.append(sound.Sound(value=ind2freq(arr[i],baseNote=baseNote), secs=dur, volume = 1,hamming = True))
 
-    print('stop 1!!')
+    
 
     #get onset time
     onTime_s = core.monotonicClock.getTime()

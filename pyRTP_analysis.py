@@ -62,7 +62,7 @@ def getRTs(task_df,evQuery = None,rt_dist_type = 'standard'):
     elif rt_dist_type == 'reciprocal':
         rts = -1./task_df['RT'].to_numpy().astype('float')
     elif rt_dist_type == 'zrrt':
-        rts = stats.zscore(-1./task_df['RT'].to_numpy().astype('float'))
+        rts = stats.zscore(-1./task_df.query('RT>0')['RT'].to_numpy().astype('float'))
     elif rt_dist_type == 'reciprobit':
     	# SORTED RTs
     	rts = np.sort(task_df['RT'].to_numpy().astype('float'))
@@ -214,7 +214,7 @@ def plotPsychometric_choice(task_df,blockQuery,query_list,lbl_list):
         task_df1 = task_df_filt.query(q)
 
         # y axis = prob increase
-        p_inc_list.append(np.count_nonzero(task_df1.eval('choice=="increase"').to_numpy())/len(task_df1)) 
+        p_inc_list.append(np.count_nonzero(task_df1.eval('choice=="right"').to_numpy())/len(task_df1)) 
     
     # plot prob left 
     plt.plot(np.arange(0,len(p_inc_list)),p_inc_list,marker = 'x',markersize = 10,markeredgewidth=3,linestyle=None,linewidth = 0)
@@ -292,23 +292,24 @@ with PdfPages(savedir+'sess_results.pdf') as pdf:
 
 
     # plot it
-    plot_RT_by_condition(task_df,condition = 'coherence',bins = 20,evQuery = 'RT>0',plot_type = 'standard')
+    rt_thresh=1
+    plot_RT_by_condition(task_df,condition = 'coherence',bins = 20,evQuery = 'RT>'+str(rt_thresh),plot_type = 'standard')
     pdf.savefig()
 
-    plot_RT_by_condition(task_df,condition = 'coherence',bins = 20,evQuery = 'RT>0',plot_type = 'reciprocal')
+    plot_RT_by_condition(task_df,condition = 'coherence',bins = 20,evQuery = 'RT>'+str(rt_thresh),plot_type = 'reciprocal')
     pdf.savefig()
 
-    plot_RT_by_condition(task_df,condition = 'coherence',bins = 20,evQuery = 'RT>0',plot_type = 'reciprobit')
+    plot_RT_by_condition(task_df,condition = 'coherence',bins = 20,evQuery = 'RT>'+str(rt_thresh),plot_type = 'reciprobit')
     pdf.savefig()
 
-    plot_RT_by_condition(task_df,condition = 'block',bins = 20,evQuery = 'RT>0',plot_type = 'standard')
+    plot_RT_by_condition(task_df,condition = 'block',bins = 20,evQuery = 'RT>'+str(rt_thresh),plot_type = 'standard')
     pdf.savefig()
 
 
-    plot_RT_by_condition(task_df,condition = 'block',bins = 20,evQuery = 'RT>0',plot_type = 'reciprocal')
+    plot_RT_by_condition(task_df,condition = 'block',bins = 20,evQuery = 'RT>'+str(rt_thresh),plot_type = 'reciprocal')
     pdf.savefig()
 
-    plot_RT_by_condition(task_df,condition = 'block',bins = 20,evQuery = 'RT>0',plot_type = 'reciprobit')
+    plot_RT_by_condition(task_df,condition = 'block',bins = 20,evQuery ='RT>'+str(rt_thresh),plot_type = 'reciprobit')
     pdf.savefig()
 
 
